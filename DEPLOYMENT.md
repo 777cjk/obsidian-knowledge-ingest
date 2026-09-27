@@ -89,7 +89,21 @@ undo a code release; the manifest is evidence and should be preserved.
 
 ## Platform connectors
 
-Feishu and Baidu Netdisk connectors are optional upstream integrations. Add
-their OAuth and scope configuration only in the host adapter. This repository
-does not store tokens, cookies, or connector configuration, and a successful
-local install does not prove that a remote connector can read file content.
+The optional Feishu Minutes adapter calls the installed `lark-cli` and reads
+one explicitly supplied `minute_token` per invocation. The user must already be
+logged in with `minutes:minutes.artifacts:read`. It writes the transcript,
+manifest, and unreviewed candidate only into the selected staging directory.
+It does not search, request access, store credentials, or write to the vault.
+The verified runtime is the official `lark-cli` v1.0.96; its transcript
+directory naming sanitizes title path characters and its `--output-dir`
+validation rejects escaping paths. Before changing CLI versions, repeat a
+single-token canary in disposable private staging and confirm the same output
+contract.
+The staging directory and its output subdirectories must be owned by the
+current user with mode `0700`; files are written with mode `0600`. Imports to
+the same staging directory are serialized on macOS/Linux.
+
+Feishu Docs/Wiki and Baidu Netdisk still require separate host OAuth/scope
+integrations. This repository does not store tokens, cookies, or connector
+configuration, and a successful local install does not prove those remote
+sources can return file content.

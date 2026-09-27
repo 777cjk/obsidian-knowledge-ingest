@@ -3,7 +3,7 @@
 一个可替换的、只读优先的采集适配层，为
 `obsidian-ai-project-management` 提供 Source Manifest 和候选素材。
 
-目标流程是把不同输入统一成；当前仓库已实现本机扫描与解析到候选这段：
+目标流程是把不同输入统一到同一个、可审计的来源记录与候选格式：
 
 ```text
 本机目录 / 飞书 / 百度网盘
@@ -19,11 +19,11 @@
 
 | 已实现 | 仍需宿主或后续适配 |
 |---|---|
-| 本机显式目录的只读扫描、哈希、重复/版本记录和 staging manifest | 飞书与百度网盘 OAuth 连接器；本仓库只约定官方连接器的接入边界 |
+| 本机显式目录扫描；明确 `minute_token` 的飞书妙记逐字稿只读导入；哈希、版本记录和 staging 候选 | 飞书云文档/Wiki 与百度网盘的 OAuth 连接器 |
 | Markdown/纯文本解析，以及显式安装的 MarkItDown、LiteParse、Docling 后端入口 | OCRmyPDF 预处理执行、自动 AI 分类、定时 watcher、审批界面和自动写入 Obsidian canonical 笔记 |
-| 带来源标识的候选文件与解析结果 schema | 真实云端内容读取、权限 scope 验证和端到端知识应用验收 |
+| 带来源标识的候选文件与解析结果 schema；飞书妙记接入已做单条真实只读 canary | 百度真实云端内容读取；飞书云文档/Wiki scope 验证；端到端知识应用验收 |
 
-因此当前版本是本机采集与解析适配器，不会扫描整台电脑、登录云盘、自动判断语义类别或直接改写 Obsidian 知识库。云连接器和 AI 分类必须由宿主显式配置，并先用单个只读 canary 验证。
+因此当前版本覆盖本机显式目录和飞书妙记逐字稿，不会扫描整台电脑、自动登录云盘、自动判断语义类别或直接改写 Obsidian canonical 笔记。飞书妙记适配器只读取用户显式给出的一个 token；云文档/Wiki 与百度连接器仍需宿主完成 OAuth 和 scope 配置，再以单个只读 canary 验证。
 
 扫描生成的 manifest 和候选会记录源文件名、locator（本机扫描时可能是绝对路径）、时间戳及 SHA-256。产物默认只写到用户指定的 staging 目录且不会自动上传；分享或提交前应检查并按需脱敏这些元数据。
 
@@ -38,11 +38,11 @@
 后续可复用、但当前未集成：
 
 - 本机文件变化事件：`gorakhargosh/watchdog`（Apache-2.0）。
-- 飞书只读连接：官方 `larksuite/lark-openapi-mcp`（MIT）或 `larksuite/oapi-sdk-python`（MIT）。
-- 百度网盘只读连接：官方 `baidu-netdisk/mcp`（MIT）。
+- 飞书云文档/Wiki：后续可接官方 `larksuite/lark-openapi-mcp` 或 `larksuite/oapi-sdk-python`；通用文档正文读取当前未集成。
+- 百度网盘：可评估 `baidu-netdisk/mcp`（MIT）；该仓库代码最近更新较早，需先确认授权、完整内容读取和可运行性。
 - 扫描 PDF OCR 预处理：`ocrmypdf/OCRmyPDF`（MPL-2.0）；当前适配器只声明它是预处理步骤，不会执行 OCR。
 
-本仓库实现 manifest、去重、版本链、权限状态、解析 schema、候选边界和回滚友好的 staging。上述连接器与 watcher 尚未打包；OAuth、scope、平台 API 和定时运行仍需后续宿主集成。
+本仓库实现 manifest、去重、版本链、权限状态、解析 schema、候选边界和回滚友好的 staging。飞书妙记连接器通过宿主已安装的 `lark-cli` 按 token 按需调用；飞书云文档/Wiki、百度连接器与 watcher 尚未打包。
 
 ## 本机目录扫描
 
@@ -67,9 +67,30 @@ python3 scripts/manifest_scan.py scan \
 
 默认不读取文件正文、不上传文件、不写 Obsidian、不删除源文件。解析和 AI 提取应在权限确认后作为下一阶段 adapter 执行。
 
+## 飞书妙记逐字稿导入
+
+先用已登录的官方 `lark-cli` 按关键词找到本人可读取的妙记 token，再显式导入一条：
+
+```bash
+lark-cli minutes +search --as user --query "项目关键词" --owner-ids me --page-size 5 --json
+python3 scripts/feishu_minutes_ingest.py \
+  --minute-token <minute-token> \
+  --staging-dir /path/to/private/staging
+```
+
+导入命令先检查 `minutes:minutes.artifacts:read`，再调用只读的 `minutes +detail --transcript`。它不会执行搜索、翻页、申请权限或调用飞书写入 API。原逐字稿、Source Manifest 和 `classification_status: pending` 的候选都写在 staging；摘要只返回标题、哈希、解析状态和候选路径，不打印逐字稿。候选必须经过人工/证据复核后才能进入知识资产层。
+
+逐字稿含用户原始内容。staging 必须是当前用户拥有、权限为 `0700` 的私有目录；导入器会用 `0600` 保存文件，并在 macOS/Linux 对同一 staging 的导入加锁串行。来源 URL 会移除 query 和 fragment。分享或提交前仍需检查候选和 manifest 的来源 locator。当前飞书云文档/Wiki 读取仍未实现，妙记权限不代表拥有云文档权限。
+
 ## 连接器边界
 
-详见 [references/connectors.md](references/connectors.md)。飞书和百度网盘都需要用户 OAuth/应用 scope；“能列目录或返回摘要”不等于已经成功取得所有文件正文。平台授权、隐私策略和失败队列必须保留在 manifest 中。
+详见 [references/connectors.md](references/connectors.md)。飞书妙记使用现有 user OAuth 与 artifacts scope；飞书云文档/Wiki、百度网盘仍需要各自的 OAuth/应用 scope。“能列目录或返回摘要”不等于已经成功取得所有文件正文。平台授权、隐私策略和失败队列必须保留在 manifest 中。
+
+网页资料可由 [Obsidian Web Clipper](https://github.com/obsidianmd/obsidian-clipper)
+经人工选择后剪藏为 Markdown；它是人工采集入口，不会扫描本机或自动分类。
+Vault MCP 是另一种可选的读取接口，但其上游默认允许整库读写；接入前应启用
+`OBSIDIAN_READ_ONLY=true` 并配置最小 `OBSIDIAN_READ_PATHS`。本 Skill 的 canonical
+写回仍须经过宿主 checkpoint。
 
 ## 验证
 
