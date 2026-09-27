@@ -113,6 +113,22 @@ Vault MCP 是另一种可选的读取接口，但其上游默认允许整库读�
 python3 -m unittest discover -s tests -v
 ```
 
+先检查本机连接器依赖和授权状态（不读取远端文件、不打印 token）：
+
+```bash
+python3 scripts/source_preflight.py
+python3 scripts/source_preflight.py --json
+```
+
+需要进入真实百度 canary 或飞书 Docs/Wiki canary 前，用对应 Gate 让缺失授权变成失败：
+
+```bash
+python3 scripts/source_preflight.py --require-baidu
+python3 scripts/source_preflight.py --require-feishu-docs
+```
+
+默认输出的 `local_ready` 只表示本机 Python 检查通过；带 `--require-*` 输出 `ready` 才表示所选授权 Gate 已满足。两者都不等于正文读取成功。正文仍须按连接器命令做单目录/单文档 canary，并检查 manifest 的完整性字段。
+
 要重复安装并运行本地 canary，使用 [DEPLOYMENT.md](DEPLOYMENT.md) 中的
 `scripts/install.sh` 和 `scripts/verify.sh`。默认安装只使用 Python 标准库；
 MarkItDown、LiteParse、Docling 和 OCRmyPDF 必须通过 `--with` 显式加入。

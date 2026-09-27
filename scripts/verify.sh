@@ -26,8 +26,10 @@ PY
     scripts/manifest_scan.py \
     scripts/parser_adapter.py \
     scripts/feishu_minutes_ingest.py \
-    scripts/baidu_netdisk_ingest.py
+    scripts/baidu_netdisk_ingest.py \
+    scripts/source_preflight.py
 "$PYTHON_BIN" -m unittest discover -s tests -v
+"$PYTHON_BIN" scripts/source_preflight.py --json >/dev/null
 
 SMOKE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/obsidian-knowledge-ingest.XXXXXX")
 cleanup() {

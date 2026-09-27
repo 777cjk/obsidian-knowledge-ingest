@@ -47,6 +47,23 @@ package wheels are already available in the local pip cache.
 scripts/verify.sh
 ```
 
+Before a remote canary, run the connector preflight. It only checks the local
+Python/MCP dependency, whether the Baidu token is present in the invoking
+process, and the three Feishu scopes. It does not fetch a file or print a
+credential:
+
+```bash
+python3 scripts/source_preflight.py --json
+python3 scripts/source_preflight.py --require-baidu
+python3 scripts/source_preflight.py --require-feishu-docs
+```
+
+The default command reports missing external gates without failing. The
+`--require-*` forms return exit code 2 when the selected gate is not ready.
+`local_ready` means only that the local Python check passed. `ready` means the
+selected required gate passed. Both are preflight results only; a real canary must still inspect the
+manifest and content completeness fields.
+
 Verification compiles the adapters, runs the unit suite, scans a temporary
 fixture directory, parses one Markdown fixture, and checks duplicate handling
 and the common parser schema. The temporary directory is removed on exit.
