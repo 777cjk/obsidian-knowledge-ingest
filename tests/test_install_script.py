@@ -21,6 +21,7 @@ class InstallScriptTests(unittest.TestCase):
             "requirements-parser-lite.txt",
             "requirements-markitdown.txt",
             "requirements-liteparse.txt",
+            "requirements-baidu-mcp.txt",
         ):
             shutil.copy2(ROOT / name, repo / name)
 
@@ -121,6 +122,16 @@ class InstallScriptTests(unittest.TestCase):
             self.assertEqual(result.returncode, 2)
             self.assertIn("require Python >= 3.10", result.stderr)
             self.assertIsNone(pip_args)
+
+    def test_baidu_mcp_uses_pinned_requirement(self):
+        with tempfile.TemporaryDirectory() as temp:
+            result, pip_args, repo = self._run(Path(temp), ["--with", "baidu-mcp"])
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                pip_args,
+                ["install", "-r", str(repo / "requirements-baidu-mcp.txt")],
+            )
 
 
 if __name__ == "__main__":

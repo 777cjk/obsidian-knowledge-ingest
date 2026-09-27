@@ -9,6 +9,7 @@ OFFLINE=0
 INSTALL_PARSER_LITE=0
 INSTALL_MARKITDOWN=0
 INSTALL_LITEPARSE=0
+INSTALL_BAIDU_MCP=0
 
 usage() {
     cat <<'EOF'
@@ -21,7 +22,7 @@ Options:
   --python PATH       Python executable used to create the virtualenv
   --venv PATH         virtualenv location (default: .venv)
   --with NAME         optional set/package: parser-lite, markitdown, liteparse,
-                      docling, ocrmypdf
+                      docling, ocrmypdf, baidu-mcp
   --offline           pass --no-index to pip for locally cached packages
   -h, --help          show this help
 
@@ -56,6 +57,7 @@ while [ "$#" -gt 0 ]; do
                     ;;
                 markitdown) INSTALL_MARKITDOWN=1 ;;
                 liteparse) INSTALL_LITEPARSE=1 ;;
+                baidu-mcp) INSTALL_BAIDU_MCP=1 ;;
                 docling|ocrmypdf) WITH_PACKAGES="$WITH_PACKAGES $2" ;;
                 *) echo "unsupported optional package: $2" >&2; exit 2 ;;
             esac
@@ -110,9 +112,17 @@ if [ "$INSTALL_PARSER_LITE" -eq 1 ] || \
     fi
 fi
 
+if [ "$INSTALL_BAIDU_MCP" -eq 1 ]; then
+    if ! "$VENV_PYTHON" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
+        echo "The Baidu MCP client requires Python >= 3.10 in the selected virtualenv" >&2
+        exit 2
+    fi
+fi
+
 if [ "$INSTALL_PARSER_LITE" -eq 1 ] || \
    [ "$INSTALL_MARKITDOWN" -eq 1 ] || \
    [ "$INSTALL_LITEPARSE" -eq 1 ] || \
+   [ "$INSTALL_BAIDU_MCP" -eq 1 ] || \
    [ -n "$WITH_PACKAGES" ]; then
     set --
     if [ "$OFFLINE" -eq 1 ]; then
@@ -127,6 +137,9 @@ if [ "$INSTALL_PARSER_LITE" -eq 1 ] || \
         if [ "$INSTALL_LITEPARSE" -eq 1 ]; then
             set -- "$@" -r "$ROOT_DIR/requirements-liteparse.txt"
         fi
+    fi
+    if [ "$INSTALL_BAIDU_MCP" -eq 1 ]; then
+        set -- "$@" -r "$ROOT_DIR/requirements-baidu-mcp.txt"
     fi
     if [ -n "$WITH_PACKAGES" ]; then
         # The values are restricted to the heavyweight optional package allowlist above.

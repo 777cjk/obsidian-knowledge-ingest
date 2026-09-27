@@ -1,0 +1,2 @@
+# Reused from baidu-netdisk/mcp's documented Python MCP client stack.
+mcp==1.6.0

@@ -15,6 +15,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import shutil
 from typing import Any
 from urllib.parse import urlparse, urlunparse
 
@@ -431,6 +432,7 @@ def _ingest_locked(minute_token: str, staging: Path, lark_cli: str) -> dict[str,
     del auth_payload
 
     backup = _archive_prior_transcript(staging, source_dir, prior) if prior else None
+    download_dir = Path(tempfile.mkdtemp(prefix=".minutes-fetch-", dir=str(source_dir)))
     minutes_command = [
         lark_cli,
         "minutes",
@@ -441,13 +443,23 @@ def _ingest_locked(minute_token: str, staging: Path, lark_cli: str) -> dict[str,
         minute_token,
         "--transcript",
         "--output-dir",
-        ".source",
+        ".",
         "--json",
     ]
     try:
-        payload = _json_success(_run_cli(minutes_command, staging), "Feishu transcript retrieval failed")
+        payload = _json_success(_run_cli(minutes_command, download_dir), "Feishu transcript retrieval failed")
         record = _minute_record(payload, minute_token)
-        transcript_path = _checked_transcript_path(record["artifacts"]["transcript_file"], staging, source_dir)
+        downloaded_path = _checked_transcript_path(
+            record["artifacts"]["transcript_file"], download_dir, download_dir
+        )
+        relative_download = downloaded_path.relative_to(download_dir)
+        target_path = source_dir / relative_download
+        ensure_private_dir(target_path.parent)
+        if target_path.exists() or target_path.is_symlink():
+            raise IngestError("transcript destination already exists")
+        os.replace(downloaded_path, target_path)
+        transcript_path = target_path
+        transcript_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
         parsed = parser_adapter.parse(transcript_path, backend="auto")
         if parsed.get("status") != "ok" or not isinstance(parsed.get("text"), str):
             raise IngestError("transcript could not be parsed")
@@ -459,7 +471,10 @@ def _ingest_locked(minute_token: str, staging: Path, lark_cli: str) -> dict[str,
             raise IngestError("transcript changed while it was being parsed")
     except Exception:
         _restore_backup(backup, source_dir)
+        shutil.rmtree(download_dir, ignore_errors=True)
         raise
+
+    shutil.rmtree(download_dir, ignore_errors=True)
 
     if prior and prior.get("content_sha256") == digest:
         _finish_backup(staging, source_dir, backup, transcript_path, digest, prior)

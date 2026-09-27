@@ -1,6 +1,6 @@
-# obsidian-knowledge-ingest v0.2.0
+# obsidian-knowledge-ingest v0.3.0
 
-Version: `0.2.0` (`v0.2.0`).
+Version: `0.3.0` (`v0.3.0`).
 
 ## Included
 
@@ -11,12 +11,19 @@ Version: `0.2.0` (`v0.2.0`).
   manifest and an unreviewed candidate.
 - Versioned parser adapter with an optional lightweight MarkItDown and
   LiteParse package set.
+- A Baidu Netdisk SSE adapter that only allows the upstream read tools
+  `file_list` and `file_doc_list`, writes platform response snapshots, and
+  distinguishes segmented text, abstract-only, and metadata-only results.
+- A shared private staging lock and a Feishu download isolation step that
+  validates a fresh relative-output directory before moving transcripts.
 - Connector-specific scopes, source trust metadata, local install, verification,
   and rollback instructions.
 
 ## Not Included
 
-- Feishu Docs/Wiki or Baidu Netdisk OAuth connector implementations.
+- Feishu Docs/Wiki OAuth integration or a verified Baidu full-file download path.
+- A real Baidu OAuth/content canary; credentials are intentionally not stored in
+  this repository.
 - Automatic AI classification, scheduled watching, approval UI, or canonical
   Obsidian writeback.
 - A full hash-locked transitive dependency set. The lightweight parser
@@ -28,7 +35,7 @@ Version: `0.2.0` (`v0.2.0`).
 scripts/verify.sh
 ```
 
-The release was checked with the full local verification suite and a private
-Feishu Minutes canary covering source hash, staging permissions, and repeated
-import idempotency. The canary transcript remains outside the public repository
-and outside the Obsidian vault.
+The release was checked with the full local verification suite, including
+offline Baidu MCP fixtures, shared-lock behavior, source hashes, staging
+permissions, and repeated import idempotency. The private Feishu canary
+transcript remains outside the public repository and outside the Obsidian vault.

@@ -22,7 +22,11 @@ for required in (root / "scripts/manifest_scan.py", root / "scripts/parser_adapt
 print(f"using Python {sys.version.split()[0]}")
 PY
 
-"$PYTHON_BIN" -m py_compile scripts/manifest_scan.py scripts/parser_adapter.py
+"$PYTHON_BIN" -m py_compile \
+    scripts/manifest_scan.py \
+    scripts/parser_adapter.py \
+    scripts/feishu_minutes_ingest.py \
+    scripts/baidu_netdisk_ingest.py
 "$PYTHON_BIN" -m unittest discover -s tests -v
 
 SMOKE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/obsidian-knowledge-ingest.XXXXXX")

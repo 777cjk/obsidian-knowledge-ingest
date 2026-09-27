@@ -19,11 +19,11 @@
 
 | 已实现 | 仍需宿主或后续适配 |
 |---|---|
-| 本机显式目录扫描；明确 `minute_token` 的飞书妙记逐字稿只读导入；哈希、版本记录和 staging 候选 | 飞书云文档/Wiki 与百度网盘的 OAuth 连接器 |
+| 本机显式目录扫描；明确 `minute_token` 的飞书妙记逐字稿只读导入；百度网盘目录只读 MCP 适配；哈希、版本记录和 staging 候选 | 飞书云文档/Wiki 与百度网盘 OAuth 配置，以及百度完整正文读取 |
 | Markdown/纯文本解析，以及显式安装的 MarkItDown、LiteParse、Docling 后端入口 | OCRmyPDF 预处理执行、自动 AI 分类、定时 watcher、审批界面和自动写入 Obsidian canonical 笔记 |
 | 带来源标识的候选文件与解析结果 schema；飞书妙记接入已做单条真实只读 canary | 百度真实云端内容读取；飞书云文档/Wiki scope 验证；端到端知识应用验收 |
 
-因此当前版本覆盖本机显式目录和飞书妙记逐字稿，不会扫描整台电脑、自动登录云盘、自动判断语义类别或直接改写 Obsidian canonical 笔记。飞书妙记适配器只读取用户显式给出的一个 token；云文档/Wiki 与百度连接器仍需宿主完成 OAuth 和 scope 配置，再以单个只读 canary 验证。
+因此当前版本覆盖本机显式目录、飞书妙记逐字稿和百度网盘显式目录的只读列表/平台文本片段，不会扫描整台电脑、自动登录云盘、自动判断语义类别或直接改写 Obsidian canonical 笔记。百度结果会明确区分 `platform_segments`、`abstract_only` 和 `metadata_only`，并将完整性标记为未验证；它不把平台摘要当作原文件全文。百度适配器仍需宿主配置 OAuth，再以单个已知目录 canary 验证实际返回内容。
 
 扫描生成的 manifest 和候选会记录源文件名、locator（本机扫描时可能是绝对路径）、时间戳及 SHA-256。产物默认只写到用户指定的 staging 目录且不会自动上传；分享或提交前应检查并按需脱敏这些元数据。
 
@@ -39,10 +39,10 @@
 
 - 本机文件变化事件：`gorakhargosh/watchdog`（Apache-2.0）。
 - 飞书云文档/Wiki：后续可接官方 `larksuite/lark-openapi-mcp` 或 `larksuite/oapi-sdk-python`；通用文档正文读取当前未集成。
-- 百度网盘：可评估 `baidu-netdisk/mcp`（MIT）；该仓库代码最近更新较早，需先确认授权、完整内容读取和可运行性。
+- 百度网盘：已复用 `baidu-netdisk/mcp`（MIT）的 SSE MCP 契约；`scripts/baidu_netdisk_ingest.py` 只允许 `file_list`/`file_doc_list`，不暴露上传、删除、移动、分享等写工具。上游返回的是可能为空的分段内容/摘要，完整正文仍需单文件 canary 证明。
 - 扫描 PDF OCR 预处理：`ocrmypdf/OCRmyPDF`（MPL-2.0）；当前适配器只声明它是预处理步骤，不会执行 OCR。
 
-本仓库实现 manifest、去重、版本链、权限状态、解析 schema、候选边界和回滚友好的 staging。飞书妙记连接器通过宿主已安装的 `lark-cli` 按 token 按需调用；飞书云文档/Wiki、百度连接器与 watcher 尚未打包。
+本仓库实现 manifest、去重、版本链、权限状态、解析 schema、候选边界和回滚友好的 staging。飞书妙记连接器通过宿主已安装的 `lark-cli` 按 token 按需调用；百度适配器通过可选的 `mcp==1.6.0` SSE 客户端按显式目录调用。
 
 ## 本机目录扫描
 
@@ -81,6 +81,21 @@ python3 scripts/feishu_minutes_ingest.py \
 导入命令先检查 `minutes:minutes.artifacts:read`，再调用只读的 `minutes +detail --transcript`。它不会执行搜索、翻页、申请权限或调用飞书写入 API。原逐字稿、Source Manifest 和 `classification_status: pending` 的候选都写在 staging；摘要只返回标题、哈希、解析状态和候选路径，不打印逐字稿。候选必须经过人工/证据复核后才能进入知识资产层。
 
 逐字稿含用户原始内容。staging 必须是当前用户拥有、权限为 `0700` 的私有目录；导入器会用 `0600` 保存文件，并在 macOS/Linux 对同一 staging 的导入加锁串行。来源 URL 会移除 query 和 fragment。分享或提交前仍需检查候选和 manifest 的来源 locator。当前飞书云文档/Wiki 读取仍未实现，妙记权限不代表拥有云文档权限。
+
+## 百度网盘只读目录导入
+
+百度适配器通过上游 `baidu-netdisk/mcp` 的 SSE 服务读取一个显式目录。它需要宿主先配置 `BAIDU_NETDISK_ACCESS_TOKEN`，默认只调用 `file_list`；文档目录可显式切换到 `file_doc_list`。每次导入限制页数和文件数，输出写入私有 staging，不写入 Obsidian 正式笔记：
+
+~~~bash
+scripts/install.sh --with baidu-mcp
+BAIDU_NETDISK_ACCESS_TOKEN='从百度授权页取得的 token' \
+  .venv/bin/python scripts/baidu_netdisk_ingest.py \
+  --path '/AI' \
+  --tool file_list \
+  --staging-dir '/private/path/baidu-staging'
+~~~
+
+适配器只开放 `file_list` 和 `file_doc_list` 两个读工具。它保留百度 `fsid`/路径/远端 MD5、原始响应快照哈希、版本链和权限状态；含平台分段或摘要时生成待审候选，但 frontmatter 会写明 `content_completeness: unverified_platform_segments` 或 `abstract_only`。没有正文或摘要的文件只进入 manifest 的 `metadata_only` 条目，不生成知识候选。不要把目录列表、摘要或平台分段报告成已获取原文件全文。
 
 ## 连接器边界
 

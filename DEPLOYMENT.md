@@ -91,8 +91,11 @@ undo a code release; the manifest is evidence and should be preserved.
 
 The optional Feishu Minutes adapter calls the installed `lark-cli` and reads
 one explicitly supplied `minute_token` per invocation. The user must already be
-logged in with `minutes:minutes.artifacts:read`. It writes the transcript,
-manifest, and unreviewed candidate only into the selected staging directory.
+logged in with `minutes:minutes.artifacts:read`. It creates a fresh private
+download directory under staging, runs the CLI with relative `--output-dir .`,
+then validates and moves the transcript into the selected staging directory.
+The manifest and unreviewed candidate are written only after that containment
+check.
 It does not search, request access, store credentials, or write to the vault.
 The verified runtime is the official `lark-cli` v1.0.96; its transcript
 directory naming sanitizes title path characters and its `--output-dir`
@@ -103,7 +106,26 @@ The staging directory and its output subdirectories must be owned by the
 current user with mode `0700`; files are written with mode `0600`. Imports to
 the same staging directory are serialized on macOS/Linux.
 
+The optional Baidu Netdisk adapter reuses the upstream `baidu-netdisk/mcp`
+SSE contract. Install its pinned client dependency with
+`scripts/install.sh --with baidu-mcp`, set `BAIDU_NETDISK_ACCESS_TOKEN` in the
+invoking process, and run `scripts/baidu_netdisk_ingest.py` with one explicit
+absolute remote directory. The adapter only permits `file_list` and
+`file_doc_list`, applies page/file bounds, writes response snapshots and
+unreviewed candidates under private staging, and shares the
+`.knowledge-ingest.lock` with the Feishu adapter. It never calls upload,
+delete, move, rename, copy, make-directory, or share tools.
+
+Baidu's documented `content` is platform-generated segmented text and may be
+empty; `abstract` may also be empty. The adapter records
+`platform_segments`, `abstract_only`, or `metadata_only` and always marks
+`content_completeness_verified: false`. A successful local fixture or tool
+discovery is not a real authorization or full-file retrieval canary. After
+OAuth, run one known directory, inspect the manifest and candidate, and
+confirm whether returned segments cover the complete source before promoting
+anything into the knowledge asset layer.
+
 Feishu Docs/Wiki and Baidu Netdisk still require separate host OAuth/scope
 integrations. This repository does not store tokens, cookies, or connector
 configuration, and a successful local install does not prove those remote
-sources can return file content.
+sources can return complete file content.

@@ -19,7 +19,7 @@ import feishu_minutes_ingest as ingest_module
 
 
 TOKEN = "obcnFixtureToken_01"
-TRANSCRIPT_PATH = f".source/artifact-Team Sync-{TOKEN}/transcript.txt"
+TRANSCRIPT_PATH = f"artifact-Team Sync-{TOKEN}/transcript.txt"
 SOURCE_ID = f"feishu_minutes:{TOKEN}"
 
 
@@ -51,7 +51,7 @@ class FixtureLarkCLI:
             transcript_path = cwd / self.transcript_path
         text = self.texts.pop(0) if len(self.texts) > 1 else self.texts[0]
         try:
-            transcript_path.resolve().relative_to((cwd / ".source").resolve())
+            transcript_path.resolve().relative_to(cwd.resolve())
             is_within_source = True
         except ValueError:
             is_within_source = False
@@ -83,7 +83,7 @@ class FixtureLarkCLI:
     def assert_minutes_command(command):
         expected = [
             "fake-lark", "minutes", "+detail", "--as", "user", "--minute-tokens", TOKEN,
-            "--transcript", "--output-dir", ".source", "--json",
+            "--transcript", "--output-dir", ".", "--json",
         ]
         if command != expected:
             raise AssertionError(f"unexpected minutes command: {command}")
@@ -115,9 +115,10 @@ class FeishuMinutesIngestTests(unittest.TestCase):
         ])
         self.assertEqual([call[0] for call in runner.calls][1], [
             "fake-lark", "minutes", "+detail", "--as", "user", "--minute-tokens", TOKEN,
-            "--transcript", "--output-dir", ".source", "--json",
+            "--transcript", "--output-dir", ".", "--json",
         ])
-        self.assertTrue(all(call[1] == self.staging.resolve() for call in runner.calls))
+        self.assertEqual(runner.calls[0][1], self.staging.resolve())
+        self.assertTrue(runner.calls[1][1].parent == (self.staging / ".source").resolve())
 
         manifest_path = self.staging / "manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))

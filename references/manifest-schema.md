@@ -25,6 +25,15 @@ entries:
 history: []
 ```
 
+Remote connectors may add provider-specific provenance without changing the
+top-level manifest contract. The Baidu adapter uses fields such as
+source_md5, source_snapshot_sha256, snapshot_file, content_completeness, and
+content_completeness_verified. Its retrieval_status is one of
+platform_segments, abstract_only, or metadata_only; the adapter leaves
+content_completeness_verified: false until a human or a separate source check
+proves that platform text covers the original file. Metadata-only records
+remain observable in the manifest but do not create a candidate note.
+
 `content_sha256` is used for exact duplicate detection. A changed file gets a
 new `revision_id`, points to the previous revision with `supersedes`, and moves
 the previous metadata snapshot into `history`. `source_id` remains stable for
