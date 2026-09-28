@@ -1,6 +1,6 @@
-# obsidian-knowledge-ingest v0.3.0
+# obsidian-knowledge-ingest v0.3.1
 
-Version: `0.3.0` (`v0.3.0`).
+Version: `0.3.1` (`v0.3.1`).
 
 ## Included
 
@@ -16,6 +16,8 @@ Version: `0.3.0` (`v0.3.0`).
   distinguishes segmented text, abstract-only, and metadata-only results.
 - A shared private staging lock and a Feishu download isolation step that
   validates a fresh relative-output directory before moving transcripts.
+- A redacted `source_preflight.py` command that separates local dependency
+  readiness, connector authorization gates, and the later real content canary.
 - Connector-specific scopes, source trust metadata, local install, verification,
   and rollback instructions.
 
@@ -35,7 +37,8 @@ Version: `0.3.0` (`v0.3.0`).
 scripts/verify.sh
 ```
 
-The release was checked with the full local verification suite, including
+The release was checked with the full local verification suite (41 tests),
+Python 3.11/3.14 CI, and the pinned parser job, including
 offline Baidu MCP fixtures, shared-lock behavior, source hashes, staging
 permissions, and repeated import idempotency. The private Feishu canary
 transcript remains outside the public repository and outside the Obsidian vault.
