@@ -1,1 +1,2 @@
-markitdown==0.1.8
+# Include the DOCX converter used by the Baidu Netdisk document canary.
+markitdown[docx]==0.1.8

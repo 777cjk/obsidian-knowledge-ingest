@@ -19,11 +19,11 @@
 
 | 已实现 | 仍需宿主或后续适配 |
 |---|---|
-| 本机显式目录扫描；明确 `minute_token` 的飞书妙记逐字稿只读导入；百度网盘目录只读 MCP 适配；哈希、版本记录和 staging 候选 | 飞书云文档/Wiki 与百度网盘 OAuth 配置，以及百度完整正文读取 |
+| 本机显式目录扫描；明确 `minute_token` 的飞书妙记逐字稿只读导入；百度网盘目录只读 MCP 适配；明确文件的官方下载与解析；哈希、版本记录和 staging 候选 | 飞书云文档/Wiki OAuth 配置、百度长期凭证托管 |
 | Markdown/纯文本解析，以及显式安装的 MarkItDown、LiteParse、Docling 后端入口 | OCRmyPDF 预处理执行、自动 AI 分类、定时 watcher、审批界面和自动写入 Obsidian canonical 笔记 |
-| 带来源标识的候选文件与解析结果 schema；飞书妙记接入已做单条真实只读 canary | 百度真实云端内容读取；飞书云文档/Wiki scope 验证；端到端知识应用验收 |
+| 带来源标识的候选文件与解析结果 schema；飞书妙记接入已做单条真实只读 canary；百度 DOCX 批量下载/解析 canary 已通过 | 飞书云文档/Wiki scope 验证；百度授权目录长期运行策略；端到端知识应用验收 |
 
-因此当前版本覆盖本机显式目录、飞书妙记逐字稿和百度网盘显式目录的只读列表/平台文本片段，不会扫描整台电脑、自动登录云盘、自动判断语义类别或直接改写 Obsidian canonical 笔记。百度结果会明确区分 `platform_segments`、`abstract_only` 和 `metadata_only`，并将完整性标记为未验证；它不把平台摘要当作原文件全文。百度适配器仍需宿主配置 OAuth，再以单个已知目录 canary 验证实际返回内容。
+因此当前版本覆盖本机显式目录、飞书妙记逐字稿和百度网盘显式目录的只读列表/平台文本片段；百度明确文件还可通过官方下载接口进入私有 staging，再由解析器生成候选。它不会扫描整台电脑、自动判断语义类别或直接改写 Obsidian canonical 笔记。MCP 平台片段、摘要与原文件下载在 manifest 中分开记录，不把摘要报告成全文。
 
 扫描生成的 manifest 和候选会记录源文件名、locator（本机扫描时可能是绝对路径）、时间戳及 SHA-256。产物默认只写到用户指定的 staging 目录且不会自动上传；分享或提交前应检查并按需脱敏这些元数据。
 
@@ -40,6 +40,7 @@
 - 本机文件变化事件：`gorakhargosh/watchdog`（Apache-2.0）。
 - 飞书云文档/Wiki：后续可接官方 `larksuite/lark-openapi-mcp` 或 `larksuite/oapi-sdk-python`；通用文档正文读取当前未集成。
 - 百度网盘：已复用 `baidu-netdisk/mcp`（MIT）的 SSE MCP 契约；`scripts/baidu_netdisk_ingest.py` 只允许 `file_list`/`file_doc_list`，不暴露上传、删除、移动、分享等写工具。上游返回的是可能为空的分段内容/摘要，完整正文仍需单文件 canary 证明。
+- 百度原文件下载：复用百度开放平台 PCS/XPan download 接口，并吸收上游 `baidu-netdisk/mcp` PR #4 的 `file_meta(dlink=1) -> dlink` 思路；`scripts/baidu_netdisk_download.py` 只写私有 staging，补充本地 SHA-256、大小校验和解析器版本记录。当前远端 MCP 主分支仍未提供 `file_download`，所以下载保留在本地 stdio/CLI 适配层。
 - 扫描 PDF OCR 预处理：`ocrmypdf/OCRmyPDF`（MPL-2.0）；当前适配器只声明它是预处理步骤，不会执行 OCR。
 
 本仓库实现 manifest、去重、版本链、权限状态、解析 schema、候选边界和回滚友好的 staging。飞书妙记连接器通过宿主已安装的 `lark-cli` 按 token 按需调用；百度适配器通过可选的 `mcp==1.6.0` SSE 客户端按显式目录调用。
@@ -84,7 +85,7 @@ python3 scripts/feishu_minutes_ingest.py \
 
 ## 百度网盘只读目录导入
 
-百度适配器通过上游 `baidu-netdisk/mcp` 的 SSE 服务读取一个显式目录。它需要宿主先配置 `BAIDU_NETDISK_ACCESS_TOKEN`，默认只调用 `file_list`；文档目录可显式切换到 `file_doc_list`。每次导入限制页数和文件数，输出写入私有 staging，不写入 Obsidian 正式笔记：
+百度适配器通过上游 `baidu-netdisk/mcp` 的 SSE 服务读取一个显式目录。它从 macOS Keychain 读取 token，也接受单进程的 `BAIDU_NETDISK_ACCESS_TOKEN` 临时覆盖，默认只调用 `file_list`；文档目录可显式切换到 `file_doc_list`。每次导入限制页数和文件数，输出写入私有 staging，不写入 Obsidian 正式笔记：
 
 ~~~bash
 scripts/install.sh --with baidu-mcp
@@ -95,7 +96,27 @@ BAIDU_NETDISK_ACCESS_TOKEN='从百度授权页取得的 token' \
   --staging-dir '/private/path/baidu-staging'
 ~~~
 
-适配器只开放 `file_list` 和 `file_doc_list` 两个读工具。它保留百度 `fsid`/路径/远端 MD5、原始响应快照哈希、版本链和权限状态；含平台分段或摘要时生成待审候选，但 frontmatter 会写明 `content_completeness: unverified_platform_segments` 或 `abstract_only`。没有正文或摘要的文件只进入 manifest 的 `metadata_only` 条目，不生成知识候选。不要把目录列表、摘要或平台分段报告成已获取原文件全文。
+适配器只开放 `file_list` 和 `file_doc_list` 两个 MCP 读工具。它保留百度 `fsid`/路径/远端 MD5、原始响应快照哈希、版本链和权限状态；含平台分段或摘要时生成待审候选，但 frontmatter 会写明 `content_completeness: unverified_platform_segments` 或 `abstract_only`。注意：上游个人用户 OAuth 应用目前标注为“限时体验”；百度授权页显示 `netdisk` scope 允许创建文件夹并读写数据。此仓库只调用读取工具，但 access token 本身不是只读凭证，不要把它放进不可信主机或多用户服务。
+
+macOS 可以把 token 存入用户 Keychain，命令会调用系统密码提示，token 不会作为命令参数传入：
+
+~~~bash
+python3 scripts/baidu_netdisk_credentials.py
+~~~
+
+导入器会优先读取 `BAIDU_NETDISK_ACCESS_TOKEN` 临时覆盖值，否则从 Keychain 读取。百度当前个人 OAuth 体验应用使用隐式 token 流程；token 过期后需重新授权并更新 Keychain 项，当前不自动刷新。
+
+需要原文件时，先列目录，再对一个明确文件运行：
+
+~~~bash
+scripts/install.sh --with baidu-mcp --with parser-lite
+BAIDU_NETDISK_ACCESS_TOKEN='从百度授权页取得的 token' \
+  .venv/bin/python scripts/baidu_netdisk_download.py \
+  --path '/来自：AKA-AL10/文档备份/情话文案.docx' \
+  --staging-dir '/private/path/baidu-download-staging'
+~~~
+
+该命令使用官方下载接口、保存原文件和解析快照，并在解析成功时生成 `candidates/*.md`。Office `~$` / LibreOffice `.~lock.*#` 临时锁文件会跳过并记入 manifest，不下载为候选。没有正文或解析器不支持的文件仍保留失败证据，不会被伪装成完整知识。百度 OAuth 的授权目录/应用目录由平台服务端决定；超出授权范围时应停止扩张并重新授权，不读取桌面 Cookie。
 
 ## 连接器边界
 
@@ -141,6 +162,7 @@ MarkItDown、LiteParse、Docling 和 OCRmyPDF 必须通过 `--with` 显式加入
 
 - 首选 Docling：需要版面、页码、表格和 OCR 保真度时使用；它是重量级可选依赖，不应成为 Skill 的强制安装依赖。
 - 轻量优先 MarkItDown：纯文本、Office 和简单 PDF 先走它；失败或版面要求更高时再转 Docling。
+- macOS 旧 `.doc`：自动回退系统 `textutil`，避免把旧二进制 Word 文件误判成“已下载但不可用”。
 - 扫描 PDF：先由 OCRmyPDF 生成可搜索副本，再交给 Docling；保留独立进程和 MPL-2.0 归属。
 - LiteParse：适合低成本 PDF 抽取；输出仍需保留页码、原文哈希和 parser 版本。
 

@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
 import parser_adapter
@@ -101,6 +102,22 @@ class ParserAdapterTests(unittest.TestCase):
 
             self.assertEqual(result["parser"]["name"], "markitdown")
             self.assertIn(result["status"], {"unavailable", "error", "ok"})
+
+    def test_auto_routes_legacy_doc_to_macos_textutil_when_available(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "legacy.doc"
+            path.write_bytes(b"fixture")
+            parser_adapter._ADAPTERS.pop("macos-textutil", None)
+            completed = subprocess.CompletedProcess(
+                args=["textutil"], returncode=0, stdout="# Legacy\nbody\n".encode(), stderr=b""
+            )
+            with mock.patch.object(parser_adapter.shutil, "which", return_value="/usr/bin/textutil"):
+                with mock.patch.object(parser_adapter.subprocess, "run", return_value=completed):
+                    result = parser_adapter.parse(path)
+
+            self.assertEqual(result["status"], "ok")
+            self.assertEqual(result["parser"], {"name": "macos-textutil", "version": "system"})
+            self.assertIn("Legacy", result["text"])
 
     @unittest.skipUnless(importlib.util.find_spec("markitdown"), "MarkItDown is not installed in this Python environment")
     def test_markitdown_parses_html_fixture(self):

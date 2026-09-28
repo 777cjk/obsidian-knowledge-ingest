@@ -137,8 +137,12 @@ class BaiduNetdiskIngestTests(unittest.TestCase):
             asyncio.run(ingest_module.fetch_records("/AI", "file_meta", 1, 1))
 
     def test_live_fetch_missing_token_is_sanitized(self):
-        with mock.patch.dict(os.environ, {}, clear=True):
-            with self.assertRaisesRegex(ingest_module.IngestError, "ACCESS_TOKEN is not configured"):
+        with mock.patch.object(
+            ingest_module,
+            "get_access_token",
+            side_effect=ingest_module.CredentialError("Baidu token is missing; store it in macOS Keychain"),
+        ):
+            with self.assertRaisesRegex(ingest_module.IngestError, "Baidu token is missing"):
                 asyncio.run(ingest_module.fetch_records("/AI", "file_list", 1, 1))
 
     def test_staging_outputs_are_private(self):

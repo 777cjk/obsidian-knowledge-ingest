@@ -19,6 +19,8 @@ import tempfile
 from typing import Any, Mapping
 from urllib.parse import quote, urlencode, urlsplit
 
+from baidu_credentials import CredentialError, get_access_token
+
 try:
     import fcntl
 except ImportError:  # pragma: no cover - target deployments are macOS/Linux
@@ -82,9 +84,10 @@ def _validate_private_dir(path: Path) -> None:
 
 @asynccontextmanager
 async def _connect():
-    token = os.environ.get("BAIDU_NETDISK_ACCESS_TOKEN")
-    if not token:
-        raise IngestError("BAIDU_NETDISK_ACCESS_TOKEN is not configured")
+    try:
+        token = get_access_token()
+    except CredentialError as exc:
+        raise IngestError(str(exc)) from None
     try:
         endpoint = urlsplit(BAIDU_SSE_ENDPOINT)
         server_url = endpoint._replace(query=urlencode({"access_token": token})).geturl()

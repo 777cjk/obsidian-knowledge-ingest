@@ -12,6 +12,8 @@ import argparse
 import json
 import mimetypes
 from pathlib import Path
+import shutil
+import subprocess
 from typing import Any, Mapping, Optional, Protocol, Sequence
 
 
@@ -23,6 +25,11 @@ TEXT_SUFFIXES = {
 }
 
 OPTIONAL_BACKENDS = {
+    "macos-textutil": {
+        "role": "legacy_doc_parser",
+        "package": "textutil",
+        "notes": "macOS built-in textutil fallback for legacy .doc files.",
+    },
     "markitdown": {
         "role": "document_parser",
         "package": "markitdown",
@@ -44,7 +51,7 @@ OPTIONAL_BACKENDS = {
         "notes": "Produces a searchable PDF for a subsequent parser; it does not emit text itself.",
     },
 }
-PARSER_BACKENDS = {"markitdown", "docling", "liteparse"}
+PARSER_BACKENDS = {"macos-textutil", "markitdown", "docling", "liteparse"}
 DOCUMENT_SUFFIXES = {
     ".doc", ".docx", ".epub", ".eml", ".html", ".htm", ".msg", ".odt",
     ".odp", ".ods", ".pdf", ".ppt", ".pptx", ".rtf", ".xls", ".xlsx",
@@ -136,6 +143,32 @@ class MarkItDownAdapter:
         return ParsedContent(
             text=text,
             metadata={"title": getattr(result, "title", None)},
+            outline=_markdown_outline(text),
+        )
+
+
+class MacOSTextutilAdapter:
+    """Use the macOS system converter for legacy binary Word documents."""
+
+    name = "macos-textutil"
+    version = "system"
+
+    def __init__(self) -> None:
+        executable = shutil.which("textutil")
+        if not executable:
+            raise ModuleNotFoundError("textutil")
+        self._executable = executable
+
+    def parse_content(self, path: Path) -> ParsedContent:
+        completed = subprocess.run(
+            [self._executable, "-convert", "txt", "-stdout", str(path)],
+            check=True,
+            capture_output=True,
+        )
+        text = completed.stdout.decode("utf-8", errors="replace")
+        return ParsedContent(
+            text=text,
+            metadata={"encoding": "utf-8", "line_count": len(text.splitlines()), "converter": self._executable},
             outline=_markdown_outline(text),
         )
 
@@ -280,7 +313,12 @@ def parse(path: str | Path, backend: str = "auto") -> dict[str, Any]:
 
     if backend == "auto":
         suffix = source_path.suffix.lower()
-        selected = "text-fixture" if suffix in TEXT_SUFFIXES else "markitdown" if suffix in DOCUMENT_SUFFIXES else "auto"
+        selected = (
+            "text-fixture" if suffix in TEXT_SUFFIXES
+            else "macos-textutil" if suffix == ".doc" and shutil.which("textutil")
+            else "markitdown" if suffix in DOCUMENT_SUFFIXES
+            else "auto"
+        )
     else:
         selected = backend
     if selected == "auto":
@@ -305,6 +343,7 @@ def parse(path: str | Path, backend: str = "auto") -> dict[str, Any]:
     adapter = _ADAPTERS.get(selected)
     if adapter is None:
         adapter_class = {
+            "macos-textutil": MacOSTextutilAdapter,
             "markitdown": MarkItDownAdapter,
             "docling": DoclingAdapter,
             "liteparse": LiteParseAdapter,
@@ -361,7 +400,7 @@ def main() -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
     parse_parser = subparsers.add_parser("parse", help="parse one local file")
     parse_parser.add_argument("path")
-    parse_parser.add_argument("--backend", choices=["auto", "text-fixture", "markitdown", "docling", "liteparse", "ocrmypdf"], default="auto")
+    parse_parser.add_argument("--backend", choices=["auto", "text-fixture", "macos-textutil", "markitdown", "docling", "liteparse", "ocrmypdf"], default="auto")
     subparsers.add_parser("backends", help="show optional parser availability without loading them")
     args = parser.parse_args()
     if args.command == "backends":

@@ -35,7 +35,7 @@ The default scanner supports Python 3.9 and newer. MarkItDown and LiteParse
 require Python 3.10 or newer; the installer checks the selected virtualenv
 before installing either package.
 
-The lightweight parser set pins MarkItDown 0.1.8 and LiteParse 2.14.7 in
+The lightweight parser set pins MarkItDown 0.1.8 (with its `docx` extra) and LiteParse 2.14.7 in
 `requirements-parser-lite.txt` and its included files. Docling and OCRmyPDF
 may require large downloads or operating-system tools; they are opt-in and
 intentionally not version-locked here. Use `--offline` only when the required
@@ -125,13 +125,24 @@ the same staging directory are serialized on macOS/Linux.
 
 The optional Baidu Netdisk adapter reuses the upstream `baidu-netdisk/mcp`
 SSE contract. Install its pinned client dependency with
-`scripts/install.sh --with baidu-mcp`, set `BAIDU_NETDISK_ACCESS_TOKEN` in the
-invoking process, and run `scripts/baidu_netdisk_ingest.py` with one explicit
-absolute remote directory. The adapter only permits `file_list` and
+`scripts/install.sh --with baidu-mcp`, then either store the token through the
+macOS Keychain prompt (`python3 scripts/baidu_netdisk_credentials.py`) or set
+`BAIDU_NETDISK_ACCESS_TOKEN` for one process. Run
+`scripts/baidu_netdisk_ingest.py` with one explicit absolute remote directory.
+The adapter only permits `file_list` and
 `file_doc_list`, applies page/file bounds, writes response snapshots and
 unreviewed candidates under private staging, and shares the
 `.knowledge-ingest.lock` with the Feishu adapter. It never calls upload,
 delete, move, rename, copy, make-directory, or share tools.
+
+The upstream README currently labels its personal OAuth app as a limited-time
+trial, and the consent page describes `netdisk` as allowing folder creation
+and read/write access. This adapter invokes only read tools, but the token's
+granted authority is broader than this process's allowlist. Keep it in the
+user's local environment or Keychain; do not deploy this trial app as a
+multi-user service or describe its token as read-only. The personal OAuth
+flow returns an access token without an automatic refresh path here; when it
+expires, authorize again and replace the Keychain item using the same prompt.
 
 Baidu's documented `content` is platform-generated segmented text and may be
 empty; `abstract` may also be empty. The adapter records
@@ -141,6 +152,26 @@ discovery is not a real authorization or full-file retrieval canary. After
 OAuth, run one known directory, inspect the manifest and candidate, and
 confirm whether returned segments cover the complete source before promoting
 anything into the knowledge asset layer.
+
+When the MCP response contains only metadata, the local download adapter can
+retrieve one explicitly selected file through Baidu's official PCS/XPan
+download endpoint and then run the shared parser contract:
+
+```bash
+scripts/install.sh --with baidu-mcp --with parser-lite
+BAIDU_NETDISK_ACCESS_TOKEN='<token>' \
+  .venv/bin/python scripts/baidu_netdisk_download.py \
+  --path '/apps/<authorized-app>/<file.docx>' \
+  --staging-dir '/private/path/baidu-download-staging'
+```
+
+The adapter streams into a user-owned `0700` staging directory, writes files
+with mode `0600`, records SHA-256 and parser output, and emits an unreviewed
+candidate only when parsing succeeds. It does not use desktop cookies, call
+MCP write tools, or modify the Obsidian vault. Baidu's current authorization
+model may restrict REST downloads to the application's authorized directory;
+an `authorized_paths` or application-directory mismatch is a real external
+gate, not a reason to treat a metadata listing as complete content.
 
 Feishu Docs/Wiki and Baidu Netdisk still require separate host OAuth/scope
 integrations. This repository does not store tokens, cookies, or connector

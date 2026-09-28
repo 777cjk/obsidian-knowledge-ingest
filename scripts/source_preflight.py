@@ -11,6 +11,8 @@ from typing import Any
 import subprocess
 import sys
 
+from baidu_credentials import is_configured as baidu_token_is_configured
+
 
 SCOPES = {
     "minutes": "minutes:minutes.artifacts:read",
@@ -53,7 +55,7 @@ def build_report(cli: str) -> dict[str, Any]:
         },
         "baidu": {
             "mcp_client": "installed" if importlib.util.find_spec("mcp") is not None else "missing",
-            "access_token": "configured" if os.environ.get("BAIDU_NETDISK_ACCESS_TOKEN") else "missing",
+            "access_token": "configured" if baidu_token_is_configured() else "missing",
         },
         "feishu": {"cli": cli, "scopes": scopes},
     }
